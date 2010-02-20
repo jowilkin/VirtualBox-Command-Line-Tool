@@ -16,6 +16,8 @@ HOST=localhost
 PORT=
 VERBOSE=
 RAM=
+CPUS=
+BASENAME=$(basename $0)
 
 ########################### Functions ##################################
 
@@ -42,23 +44,20 @@ startVM() {
 		isRunning "$VBOX"
 		RUNNING=$?
 		if [ $RUNNING -eq 1 ]; then
-			echo "$VBOX is already running"
+			echo "$VBOX is already running" >&2
 			exit 1
 		else
-			echo "$VBOX is not running, starting it"
 			if [ -n "$PORT" ]; then
-				echo "Starting VRDP on ${HOST}:${PORT}"
 				VBoxHeadless -startvm "$VBOX" --vrdp=on \
-					--vrdpport $PORT --vrdpaddress $HOST  &
+					--vrdpport $PORT --vrdpaddress $HOST &>/dev/null & 
 				disown
-			else
-				echo "Starting VM $VBOX with no vrdp"					
-				VBoxHeadless -startvm "$VBOX" --vrdp=off &
+			else					
+				VBoxHeadless -startvm "$VBOX" --vrdp=off &>/dev/null &
 				disown
 			fi
 		fi
 	else
-		echo "No virtual machine specified"
+		echo "No virtual machine specified" >&2
 		exit 1
 	fi
 }
@@ -68,7 +67,6 @@ startVM() {
 isValidVM() {
 	VMNAME=$1
 	MATCH=$(VBoxManage -q list vms | sed 's/"\(.*\)".*/\1/' | grep ^${VMNAME}$)
-	#echo "Match is $MATCH"
 	if [ $MATCH ]; then
 		return 1
 	else
@@ -87,15 +85,36 @@ isValidPort() {
 	return 1
 }
 
+setRam() {
+	echo "To fill in"
+}
+
+setCPUs() {
+	echo "To fill in"
+}
+
+setVRDP() {
+	echo "To fill in"
+}
+
+usage() {
+	echo "usage: $BASENAME [OPTION] COMMAND"  >&2
+}
+
 ######################### Main #########################################
+
+# Check if any arguments were supplied and exit if not
+if [ $# -eq 1 ]; then
+	usage
+	exit 1
+fi
 
 # Parse the command line flags and options
 OPTS=$(getopt -o h:p:vr: --long vm:,host:,port:,verbose,help,ram: -n 'vbox.bash' -- "$@")
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 eval set -- "$OPTS"
 
-
-# Process command line flags
+# Process the flags
 while [ "$1" != "--" ]
 do
 	case $1 in
@@ -105,7 +124,7 @@ do
 			# Check if this VM is registered with VirtualBox
 			isValidVM $VBOX
 			if [ $? -eq 0 ]; then
-				echo "$VBOX is not a valid VM on this machine"
+				echo "$VBOX is not a valid VM on this machine" >&2
 				exit 1
 			fi
 			shift 2
@@ -119,33 +138,30 @@ do
 			PORT=$2
 			isValidPort $PORT 
 			if [ $? -eq 0 ]; then
-				echo "$PORT is not a valid port"
-				echo "Choose an unused port between 1024 and 65535"
+				echo "$PORT is not a valid port" >&2
+				echo "Choose an unused port between 1024 and 65535" >&2
 				exit 1
 			fi
-			echo "Using VRDP port $2"
 			shift 2
 			;;
 		-v|--verbose)
-			#echo "Verbose mode on"
 			VERBOSE=1
 			shift
 			;;
 		-r|--ram)
-			#echo "RAM variable is $2"
 			RAM=$2
 			shift 2
 			;;
 		--help)
-			echo "Read the script dummy"
+			echo "Read the script dummy" >&2
 			exit 0
 			;;	
 		--)
-			echo "This shouldn't get printed!!!!"
+			echo "This shouldn't get printed!!!!" >&2
 			shift
 			;;
 		*)
-			echo "usage: $0 [OPTION] COMMAND"
+			echo "usage: $0 [OPTION] COMMAND" >&2
 			exit 1
 	esac
 done
@@ -180,14 +196,14 @@ do
 				VBoxManage -q controlvm "$VBOX" resume
 				exit $?
 			else
-				echo "Must specify a VM to resume"
+				echo "Must specify a VM to resume" >&2
 				exit 1
 			fi
 			;;
 		save)
-			VBoxManage -q controlvm "$VBOX" savestate
 			echo "Use the start command to resume from the saved state"
-			exit 0
+			VBoxManage -q controlvm "$VBOX" savestate
+			exit $?
 			;;
 		status)
 			echo "Host: $VBOX @ $HOST:$PORT"
@@ -215,7 +231,7 @@ do
 				echo "Showing $VBOX"
 				VBoxManage -q showvminfo "$VBOX"
 			else
-				echo "Must specify a VM to show"
+				echo "Must specify a VM to show" >&2
 				exit 1
 			fi
 			shift
@@ -227,10 +243,11 @@ do
 					echo "Setting RAM of $VBOX to $RAM"
 					VBoxManage -q modifyvm "$VBOX" --memory "$RAM"
 				else
-					echo "Cannot modify RAM of a running VM"
+					echo "Cannot modify RAM of a running VM"  >&2
+					exit 1
 				fi
 			else
-				echo "Must specify a powered down VM to modify and a RAM amount"
+				echo "Must specify a powered down VM and a RAM amount"  >&2
 				exit 1
 			fi
 			shift
@@ -248,7 +265,7 @@ do
 			shift
 			;;
 		*)
-			echo "usage: $0 [OPTION] COMMAND"
+			usage
 			exit 1
 	esac
 done
