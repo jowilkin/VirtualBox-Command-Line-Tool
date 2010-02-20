@@ -24,7 +24,6 @@ RAM=
 isRunning() {
 	VMNAME=$1
 	MATCH=$(VBoxManage -q list runningvms | sed 's/"\(.*\)".*/\1/' | grep ^${VMNAME}$)
-	#echo "Match is $MATCH"
 	if [ $MATCH ]; then
 		return 1
 	else
@@ -35,14 +34,13 @@ isRunning() {
 # startVM() - takes 3 arguments, VBOX name, HOST name, Port number,
 # in that order
 startVM() {
-	$VBOX = $1
-	$HOST = $2
-	$PORT = $3
+	VBOX=$1
+	HOST=$2
+	PORT=$3
 	
 	if [ -n "$VBOX" ]; then
 		isRunning "$VBOX"
 		RUNNING=$?
-		echo "running = $RUNNING"
 		if [ $RUNNING -eq 1 ]; then
 			echo "$VBOX is already running"
 			exit 1
@@ -50,12 +48,12 @@ startVM() {
 			echo "$VBOX is not running, starting it"
 			if [ -n "$PORT" ]; then
 				echo "Starting VRDP on ${HOST}:${PORT}"
-				VBoxHeadless -q -startvm "$VBOX" --vrdp=on \
+				VBoxHeadless -startvm "$VBOX" --vrdp=on \
 					--vrdpport $PORT --vrdpaddress $HOST  &
 				disown
 			else
 				echo "Starting VM $VBOX with no vrdp"					
-				VBoxHeadless -q -startvm "$VBOX" --vrdp=off &
+				VBoxHeadless -startvm "$VBOX" --vrdp=off &
 				disown
 			fi
 		fi
@@ -78,6 +76,17 @@ isValidVM() {
 	fi
 }
 
+# isValidPort() - Takes one argument, a port number.  It returns 1 if the
+# port is valid for a VRDP server and 0 otherwise.
+isValidPort() {
+	PORT=$1
+	if [ $PORT -lt 1024 ] || [ $PORT -gt 65535 ]; then
+		return 0
+	fi
+	
+	return 1
+}
+
 ######################### Main #########################################
 
 # Parse the command line flags and options
@@ -92,6 +101,8 @@ do
 	case $1 in
 		--vm) 
 			VBOX=$2
+			
+			# Check if this VM is registered with VirtualBox
 			isValidVM $VBOX
 			if [ $? -eq 0 ]; then
 				echo "$VBOX is not a valid VM on this machine"
@@ -105,17 +116,23 @@ do
 			shift 2
 			;;
 		-p|--port)
-			echo "Using VRDP port $2"
 			PORT=$2
+			isValidPort $PORT 
+			if [ $? -eq 0 ]; then
+				echo "$PORT is not a valid port"
+				echo "Choose an unused port between 1024 and 65535"
+				exit 1
+			fi
+			echo "Using VRDP port $2"
 			shift 2
 			;;
 		-v|--verbose)
-			echo "Verbose mode on"
+			#echo "Verbose mode on"
 			VERBOSE=1
 			shift
 			;;
 		-r|--ram)
-			echo "RAM variable is $2"
+			#echo "RAM variable is $2"
 			RAM=$2
 			shift 2
 			;;
@@ -141,46 +158,27 @@ while [ "$1" != "" ]
 do
 	case $1 in
 		start)
-			if [ -n "$VBOX" ]; then
-				isRunning "$VBOX"
-				RUNNING=$?
-				echo "running = $RUNNING"
-				if [ $RUNNING -eq 1 ]; then
-					echo "$VBOX is already running"
-					exit 1
-				else
-					echo "$VBOX is not running, starting it"
-					if [ -n "$PORT" ]; then
-						echo "Starting VRDP on ${HOST}:${PORT}"
-						VBoxHeadless -q -startvm "$VBOX" --vrdp=on \
-							--vrdpport $PORT --vrdpaddress $HOST  &
-						disown
-					else
-						echo "Starting VM $VBOX with no vrdp"					
-						VBoxHeadless -q -startvm "$VBOX" --vrdp=off &
-						disown
-					fi
-				fi
-			else
-				echo "No virtual machine specified"
-				exit 1
-			fi
+			startVM $VBOX $HOST $PORT
 			shift
 			;;
 		poweroff)
 			VBoxManage -q controlvm "$VBOX" poweroff
+			exit $?
 			;;
 		reset)
 			VBoxManage -q controlvm "$VBOX" reset
+			exit $?
 			;;
 		pause)
-			VBoxManage -q controlvm "$VBOX" pause
 			echo "Use the resume command to unpause the machine"
+			VBoxManage -q controlvm "$VBOX" pause
+			exit $?
 			;;
 		resume)
 			if [ -n "$VBOX" ]; then
 				echo "Resuming $VBOX"
 				VBoxManage -q controlvm "$VBOX" resume
+				exit $?
 			else
 				echo "Must specify a VM to resume"
 				exit 1
@@ -193,7 +191,7 @@ do
 			;;
 		status)
 			echo "Host: $VBOX @ $HOST:$PORT"
-	    		echo "Status: $(VBoxManage showvminfo $VBOX | grep State | cut -d" " -f12-)"
+	    	echo "Status: $(VBoxManage showvminfo $VBOX | grep State | cut -d" " -f12-)"
 			exit 0
 			;;
 		list)
