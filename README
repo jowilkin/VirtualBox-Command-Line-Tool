@@ -1,0 +1,9 @@
+This is a tool to manage a set of headless VirtualBox virtual machines 
+running on a single computer.  It is not designed to handle teleportation 
+or any other features that might be wanted in an enterprise setting.
+
+It is an executable bash script, so to install, just put it someone on
+your path.
+
+It is not currently designed to ease creation of VMs, but can be used
+to modify some of their attributes.
