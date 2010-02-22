@@ -7,3 +7,33 @@ your path.
 
 It is not currently designed to ease creation of VMs, but can be used
 to modify some of their attributes.
+
+Usage:
+
+There are two ways to use the script.  One is to manipulate a particular
+virtual machine.  The syntax for this is:
+
+vbox VMNAME COMMAND [OPTIONS] [FLAGS]
+
+Where:
+	VMNAME = name of a valid virtual machine on the computer
+	COMMAND = start|poweroff|reset|pause|resume|save|status|show|setram|setcpus|running
+	OPTIONS are only used for a few commands, setram takes an amount of
+		ram in MB and setcpus takes a number of cpus
+		
+The second way to use the script is to get general information about the
+VirtualBox setup on the computer such as listing all virtual machines.
+The syntax is:
+
+vbox COMMAND
+
+Where:
+	COMMAND = list|listrunning
+
+FLAGS can be any of the following
+	-h|--host - sets the ip address to run the VRDP server on if starting
+				a vm
+	-p|--port - sets the port for the VRDP server to run on if starting
+				a vm
+	-v|--verbose - be verbose with output
+	--help		get some help (not useful right now :) )

@@ -22,7 +22,7 @@ GREP=/bin/grep
 VBOX=
 HOST=localhost
 PORT=
-VERBOSE=
+VERBOSE=0
 RAM=
 CPUS=
 BASENAME=$(basename $0)
@@ -41,32 +41,40 @@ isRunning() {
 	fi
 }
 
-# startVM() - takes 3 arguments, VBOX name, HOST name, Port number,
-# in that order
+# startVM() - takes 4 arguments, VBOX name, HOST name, Port number,
+# and VERBOSE in that order
 startVM() {
 	VBOX=$1
 	HOST=$2
 	PORT=$3
+	VERBOSE=$4
+	
+	#if [ $VERBOSE -eq 1  ]; then
+		#SUPPRESS=""
+	#else
+		#SUPPRESS=
+	#fi
 	
 	if [ -n "$VBOX" ]; then
 		isRunning "$VBOX"
 		RUNNING=$?
 		if [ $RUNNING -eq 1 ]; then
 			echo "$VBOX is already running" >&2
-			exit 1
+			return 0
 		else
 			if [ -n "$PORT" ]; then
 				$VBOXHEADLESS -startvm "$VBOX" --vrdp=on \
-					--vrdpport $PORT --vrdpaddress $HOST &>/dev/null & 
+					--vrdpport $PORT --vrdpaddress $HOST & 
 				disown
 			else					
-				$VBOXHEADLESS -startvm "$VBOX" --vrdp=off &>/dev/null &
+				$VBOXHEADLESS -startvm "$VBOX" --vrdp=off &
 				disown
 			fi
+			return 1
 		fi
 	else
 		echo "No virtual machine specified" >&2
-		exit 1
+		return 0
 	fi
 }
 
@@ -86,19 +94,58 @@ isValidVM() {
 # port is valid for a VRDP server and 0 otherwise.
 isValidPort() {
 	PORT=$1
-	if [ $PORT -lt 1024 ] || [ $PORT -gt 65535 ]; then
-		return 0
-	fi
 	
-	return 1
+	if [ $PORT -lt 1024 ] || [ $PORT -gt 65535 ]; then
+		echo "$PORT is not a valid port" >&2
+		echo "Choose an unused port between 1024 and 65535" >&2
+		return 0
+	elif [ "$(lsof -n -i:$PORT -P)" ]; then
+		echo "$PORT is in use" >&2
+		echo "Choose an unused port between 1024 and 65535" >&2
+		return 0
+	else
+		return 1
+	fi
 }
 
 setRam() {
-	echo "To fill in"
+	VBOX=$1
+	RAM=$2
+	
+	if [ "$VBOX" ] && [ "$RAM" ]; then
+		echo "Attempting to set RAM of $VBOX to $RAM"  >&2
+		isRunning "$VBOX"
+		if [ "$?" -eq 0 ]; then
+			echo "Setting RAM of $VBOX to $RAM"
+			$VBOXMANAGE -q modifyvm "$VBOX" --memory "$RAM"
+		else
+			echo "Cannot modify RAM of a running VM"  >&2
+			return 0
+		fi
+	else
+		echo "Must specify a powered down VM and a RAM amount"  >&2
+		return 0
+	fi
 }
 
 setCPUs() {
-	echo "To fill in"
+	VBOX=$1
+	CPUS=$2
+	
+	if [ "$VBOX" ] && [ "$CPUS" ]; then
+		echo "Attempting to set CPUS of $VBOX to $CPUS"  >&2
+		isRunning "$VBOX"
+		if [ "$?" -eq 0 ]; then
+			echo "Setting CPUS of $VBOX to $CPUS"
+			$VBOXMANAGE -q modifyvm "$VBOX" --cpus "$CPUS"
+		else
+			echo "Cannot modify CPUS of a running VM"  >&2
+			exit 1
+		fi
+	else
+		echo "Must specify a powered down VM and number of CPUS"  >&2
+		exit 1
+	fi
 }
 
 setVRDP() {
@@ -106,19 +153,19 @@ setVRDP() {
 }
 
 usage() {
-	echo "usage: $BASENAME [OPTION] COMMAND"  >&2
+	echo "usage: $BASENAME [OPTIONS] VM_NAME COMMAND"  >&2
 }
 
 ######################### Main #########################################
 
 # Check if any arguments were supplied and exit if not
-if [ $# -eq 1 ]; then
+if [ $# -eq 0 ]; then
 	usage
 	exit 1
 fi
 
 # Parse the command line flags and options
-OPTS=$(getopt -o h:p:vr: --long vm:,host:,port:,verbose,help,ram: -n 'vbox.bash' -- "$@")
+OPTS=$(getopt -o h:p: --long host:,port:,verbose,help -n 'vbox' -- "$@")
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 eval set -- "$OPTS"
 
@@ -126,17 +173,6 @@ eval set -- "$OPTS"
 while [ "$1" != "--" ]
 do
 	case $1 in
-		--vm) 
-			VBOX=$2
-			
-			# Check if this VM is registered with VirtualBox
-			isValidVM $VBOX
-			if [ $? -eq 0 ]; then
-				echo "$VBOX is not a valid VM on this machine" >&2
-				exit 1
-			fi
-			shift 2
-			;;
 		-h|--host)
 			echo "Using host $2"
 			HOST=$2
@@ -156,10 +192,6 @@ do
 			VERBOSE=1
 			shift
 			;;
-		-r|--ram)
-			RAM=$2
-			shift 2
-			;;
 		--help)
 			echo "Read the script dummy" >&2
 			exit 0
@@ -177,106 +209,123 @@ done
 # Move past the -- at the end of the flags
 shift
 
-# Process the command
-while [ "$1" != "" ]
-do
-	case $1 in
-		start)
-			startVM $VBOX $HOST $PORT
-			shift
-			;;
-		poweroff)
-			$VBOXMANAGE -q controlvm "$VBOX" poweroff
-			exit $?
-			;;
-		reset)
-			$VBOXMANAGE -q controlvm "$VBOX" reset
-			exit $?
-			;;
-		pause)
-			echo "Use the resume command to unpause the machine"
-			$VBOXMANAGE -q controlvm "$VBOX" pause
-			exit $?
-			;;
-		resume)
-			if [ -n "$VBOX" ]; then
-				echo "Resuming $VBOX"
-				$VBOXMANAGE -q controlvm "$VBOX" resume
-				exit $?
-			else
-				echo "Must specify a VM to resume" >&2
-				exit 1
-			fi
-			;;
-		save)
-			echo "Use the start command to resume from the saved state"
-			$VBOXMANAGE -q controlvm "$VBOX" savestate
-			exit $?
-			;;
-		status)
-			echo "Host: $VBOX @ $HOST:$PORT"
-	    	echo "Status: $($VBOXMANAGE showvminfo $VBOX | $GREP State | cut -d" " -f12-)"
-			exit 0
-			;;
-		list)
-			if [ $VERBOSE ]; then
-				$VBOXMANAGE -q list vms 
-			else
-				$VBOXMANAGE -q list vms | $SED 's/"\(.*\)".*/\1/'
-			fi
-			shift
-			;;
-		listrunning)
-			if [ $VERBOSE ]; then
-				$VBOXMANAGE -q list runningvms 
-			else
-				$VBOXMANAGE -q list runningvms | $SED 's/"\(.*\)".*/\1/'
-			fi
-			shift
-			;;
-		show)
-			if [ -n "$VBOX" ]; then
-				echo "Showing $VBOX"
-				$VBOXMANAGE -q showvminfo "$VBOX"
-			else
-				echo "Must specify a VM to show" >&2
-				exit 1
-			fi
-			shift
-			;;
-		setram)
-			if [ "$VBOX" ] && [ "$RAM" ]; then
-				isRunning "$VBOX"
-				if [ "$?" -eq 0 ]; then
-					echo "Setting RAM of $VBOX to $RAM"
-					$VBOXMANAGE -q modifyvm "$VBOX" --memory "$RAM"
+if [ "$1" != "" ]; then
+	# Check if this VM is registered with VirtualBox
+	isValidVM $1
+	if [ $? -eq 1 ]; then
+		VBOX=$1
+		echo "$VBOX will be manipulated" >&2
+		shift
+		
+		case $1 in
+			start)
+				startVM $VBOX $HOST $PORT $VERBOSE
+				if [ $? == 0 ]; then
+					exit 1
 				else
-					echo "Cannot modify RAM of a running VM"  >&2
+					exit 0
+				fi
+				;;
+			poweroff)
+				$VBOXMANAGE -q controlvm "$VBOX" poweroff
+				exit $?
+				;;
+			reset)
+				$VBOXMANAGE -q controlvm "$VBOX" reset
+				exit $?
+				;;
+			pause)
+				echo "Use the resume command to unpause the machine"
+				$VBOXMANAGE -q controlvm "$VBOX" pause
+				exit $?
+				;;
+			resume)
+				if [ -n "$VBOX" ]; then
+					echo "Resuming $VBOX"
+					$VBOXMANAGE -q controlvm "$VBOX" resume
+					exit $?
+				else
+					echo "Must specify a VM to resume" >&2
 					exit 1
 				fi
-			else
-				echo "Must specify a powered down VM and a RAM amount"  >&2
+				;;
+			save)
+				echo "Use the start command to resume from the saved state"
+				$VBOXMANAGE -q controlvm "$VBOX" savestate
+				exit $?
+				;;
+			status)
+				echo "Host: $VBOX @ $HOST:$PORT"
+				echo "Status: $($VBOXMANAGE showvminfo $VBOX | $GREP State | cut -d" " -f12-)"
+				exit 0
+				;;
+			show)
+				if [ -n "$VBOX" ]; then
+					echo "Showing $VBOX"
+					$VBOXMANAGE -q showvminfo "$VBOX"
+				else
+					echo "Must specify a VM to show" >&2
+					exit 1
+				fi
+				shift
+				;;
+			setram)
+				RAM=$2
+				setRam $VBOX $RAM
+				if [ $? -eq 0 ]; then
+					exit 1
+				else
+					exit 0
+				fi
+				;;
+			setcpus)
+				CPUS=$2
+				setCPUs $VBOX $CPUS
+				if [ $? -eq 0 ]; then
+					exit 1
+				else
+					exit 0
+				fi
+				;;
+			running)
+				isRunning "$VBOX"
+				if [ "$?" -eq 1 ]; then
+					echo "$VBOX is running"
+				else
+					echo "$VBOX is not running"
+				fi
+				shift
+				;;
+			*)
+				echo "Must specify a valid command to perform on $VBOX"
+				usage
 				exit 1
-			fi
-			shift
-			;;
-		setcpus)
-			shift
-			;;
-		running)
-			isRunning "$VBOX"
-			if [ "$?" -eq 1 ]; then
-				echo "$VBOX is running"
-			else
-				echo "$VBOX is not running"
-			fi
-			shift
-			;;
-		*)
-			usage
-			exit 1
-	esac
-done
+		esac
+	else # Process command not related to a specific vbox
+		case $1 in
+			list)
+				if [ $VERBOSE ]; then
+					$VBOXMANAGE -q list vms 
+				else
+					$VBOXMANAGE -q list vms | $SED 's/"\(.*\)".*/\1/'
+				fi
+				shift
+				;;
+			listrunning)
+				if [ $VERBOSE ]; then
+					$VBOXMANAGE -q list runningvms 
+				else
+					$VBOXMANAGE -q list runningvms | $SED 's/"\(.*\)".*/\1/'
+				fi
+				shift
+				;;
+			*)
+				echo "$1 not a valid VM name or command"
+				usage
+				exit 1
+		esac
+	fi
+fi
 
 # Finished without errors
 exit 0
