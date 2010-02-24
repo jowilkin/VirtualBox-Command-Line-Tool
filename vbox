@@ -25,14 +25,14 @@ PORT=
 VERBOSE=
 RAM=
 CPUS=
-BASENAME=$(basename $0)
+BASENAME=$(basename "$0")
 
 ########################### Functions ##################################
 
 # isRunning() - Takes one argument, the name of the Virtual Machine.  If 
 # the VM is running it returns 1, else it returns 0.
 isRunning() {
-	VMNAME=$1
+	VMNAME="$1"
 	MATCH=$($VBOXMANAGE -q list runningvms | $SED 's/"\(.*\)".*/\1/' | $GREP ^${VMNAME}$)
 	if [ $MATCH ]; then
 		return 1
@@ -44,10 +44,10 @@ isRunning() {
 # startVM() - takes 4 arguments, VBOX name, HOST name, Port number,
 # and VERBOSE in that order
 startVM() {
-	VBOX=$1
-	HOST=$2
-	PORT=$3
-	VERBOSE=$4
+	VBOX="$1"
+	HOST="$2"
+	PORT="$3"
+	VERBOSE="$4"
 	
 	#if [ $VERBOSE -eq 1  ]; then
 		#SUPPRESS=""
@@ -81,7 +81,7 @@ startVM() {
 # isValidVM() - Takes one argument, the name of the Virtual Machine.  If 
 # the VM is registered with VirtualBox it returns 1, else it returns 0.
 isValidVM() {
-	VMNAME=$1
+	VMNAME="$1"
 	MATCH=$($VBOXMANAGE -q list vms | $SED 's/"\(.*\)".*/\1/' | $GREP ^${VMNAME}$)
 	if [ $MATCH ]; then
 		return 1
@@ -93,7 +93,7 @@ isValidVM() {
 # isValidPort() - Takes one argument, a port number.  It returns 1 if the
 # port is valid for a VRDP server and 0 otherwise.
 isValidPort() {
-	PORT=$1
+	PORT="$1"
 	
 	if [ $PORT -lt 1024 ] || [ $PORT -gt 65535 ]; then
 		echo "$PORT is not a valid port" >&2
@@ -109,8 +109,8 @@ isValidPort() {
 }
 
 setRam() {
-	VBOX=$1
-	RAM=$2
+	VBOX="$1"
+	RAM="$2"
 	
 	if [ "$VBOX" ] && [ "$RAM" ]; then
 		echo "Attempting to set RAM of $VBOX to $RAM"  >&2
@@ -129,8 +129,8 @@ setRam() {
 }
 
 setCPUs() {
-	VBOX=$1
-	CPUS=$2
+	VBOX="$1"
+	CPUS="$2"
 	
 	if [ "$VBOX" ] && [ "$CPUS" ]; then
 		echo "Attempting to set CPUS of $VBOX to $CPUS"  >&2
@@ -172,14 +172,14 @@ eval set -- "$OPTS"
 # Process the flags
 while [ "$1" != "--" ]
 do
-	case $1 in
+	case "$1" in
 		-h|--host)
 			echo "Using host $2"
-			HOST=$2
+			HOST="$2"
 			shift 2
 			;;
 		-p|--port)
-			PORT=$2
+			PORT="$2"
 			isValidPort $PORT 
 			if [ $? -eq 0 ]; then
 				echo "$PORT is not a valid port" >&2
@@ -211,13 +211,12 @@ shift
 
 if [ "$1" != "" ]; then
 	# Check if this VM is registered with VirtualBox
-	isValidVM $1
+	isValidVM "$1"
 	if [ $? -eq 1 ]; then
-		VBOX=$1
-		echo "$VBOX will be manipulated" >&2
+		VBOX="$1"
 		shift
 		
-		case $1 in
+		case "$1" in
 			start)
 				startVM $VBOX $HOST $PORT $VERBOSE
 				if [ $? == 0 ]; then
@@ -270,8 +269,8 @@ if [ "$1" != "" ]; then
 				shift
 				;;
 			setram)
-				RAM=$2
-				setRam $VBOX $RAM
+				RAM="$2"
+				setRam "$VBOX" "$RAM"
 				if [ $? -eq 0 ]; then
 					exit 1
 				else
@@ -279,8 +278,8 @@ if [ "$1" != "" ]; then
 				fi
 				;;
 			setcpus)
-				CPUS=$2
-				setCPUs $VBOX $CPUS
+				CPUS="$2"
+				setCPUs "$VBOX" "$CPUS"
 				if [ $? -eq 0 ]; then
 					exit 1
 				else
@@ -302,7 +301,7 @@ if [ "$1" != "" ]; then
 				exit 1
 		esac
 	else # Process command not related to a specific vbox
-		case $1 in
+		case "$1" in
 			list)
 				if [ $VERBOSE ]; then
 					$VBOXMANAGE -q list vms 
