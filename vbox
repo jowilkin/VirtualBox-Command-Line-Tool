@@ -108,6 +108,8 @@ isValidPort() {
 	fi
 }
 
+# Set the amount of RAM a VM will use
+# Takes 2 arguments, the VM name and then the amount of RAM in MB
 setRam() {
 	VBOX="$1"
 	RAM="$2"
@@ -128,6 +130,9 @@ setRam() {
 	fi
 }
 
+# Set the number of cpus a VM will use
+# Requires hardware virtualization support
+# Takes 2 arguments, the VM name and then the number of cpus to use
 setCPUs() {
 	VBOX="$1"
 	CPUS="$2"
@@ -146,6 +151,28 @@ setCPUs() {
 		echo "Must specify a powered down VM and number of CPUS"  >&2
 		exit 1
 	fi
+}
+
+# Connect to a VM with remote desktop
+# Requires that the VM was started with VRDP running
+# Takes one argument, the VM name
+connectToVM() {
+	VBOX="$1"
+
+	# First figure out what port $VBOX uses for VRDP
+	getVRDPport $VBOX
+	echo "Trying to connect to $VBOX on port $HOST:$PORT"
+
+	rdesktop -a 16 -N $HOST:$PORT &
+}
+
+# Get the port a VM is listening for VRDP on
+# Takes on input, the name of the VM
+getVRDPport() {
+	VBOX="$1"
+
+	VRDPport=$($VBOXMANAGE -q showvminfo "$VBOX" | grep "VRDP port:" | tr -dc '[0-9]')
+	PORT=$VRDPport
 }
 
 setVRDP() {
@@ -267,6 +294,9 @@ if [ "$1" != "" ]; then
 					exit 1
 				fi
 				shift
+				;;
+			connect)
+				connectToVM "$VBOX"
 				;;
 			setram)
 				RAM="$2"
