@@ -9,6 +9,10 @@
 # http://sam.zoy.org/wtfpl/COPYING for more details.
 #
 
+
+# TODO: 1) forwardssh needs to detect ADAPTER automatically
+#       2) connect should check if a vrdp port is open
+
 ############################ Absolute paths ############################
 
 VBOXHEADLESS=/usr/bin/VBoxHeadless
@@ -26,6 +30,10 @@ VERBOSE=
 RAM=
 CPUS=
 BASENAME=$(basename "$0")
+GUESTPORT=
+HOSTPORT=
+INTERFACE="0"
+ADAPTER="e1000"
 
 ########################### Functions ##################################
 
@@ -179,6 +187,33 @@ setVRDP() {
 	echo "To fill in"
 }
 
+# Takes one argument
+setSSHport() {
+	VBOX="$1"
+	HOSTPORT="$2"
+	GUESTPORT="$3"
+	ADAPTER="$4"
+	INTERFACE="$5"
+
+
+	if [ "$VBOX" ] && [ "$GUESTPORT" ] && [ "$HOSTPORT" ]; then
+		echo "Attempting to forward host port $HOSTPORT on host to $GUESTPORT of $VBOX"  >&2
+		isRunning "$VBOX"
+		if [ "$?" -eq 0 ]; then
+			$VBOXMANAGE -q setextradata "$VBOX" "VBoxInternal/Devices/$ADAPTER/$INTERFACE/LUN#0/Config/guestssh/Protocol" TCP
+			$VBOXMANAGE -q setextradata "$VBOX" "VBoxInternal/Devices/$ADAPTER/$INTERFACE/LUN#0/Config/guestssh/GuestPort" $GUESTPORT
+			$VBOXMANAGE -q setextradata "$VBOX" "VBoxInternal/Devices/$ADAPTER/$INTERFACE/LUN#0/Config/guestssh/HostPort" $HOSTPORT
+		else
+			echo "Cannot modify network settings of a running VM"  >&2
+			return 0
+		fi
+	else
+		echo "Must specify a powered down VM to modify along with host and guest ports"  >&2
+		return 0
+	fi
+
+}
+
 usage() {
 	echo "usage: $BASENAME [OPTIONS] VM_NAME COMMAND"  >&2
 }
@@ -192,7 +227,7 @@ if [ $# -eq 0 ]; then
 fi
 
 # Parse the command line flags and options
-OPTS=$(getopt -o h:p: --long host:,port:,verbose,help -n 'vbox' -- "$@")
+OPTS=$(getopt -o h:p: --long host:,port:,guestport:,hostport:,verbose,help -n 'vbox' -- "$@")
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 eval set -- "$OPTS"
 
@@ -213,6 +248,21 @@ do
 				echo "Choose an unused port between 1024 and 65535" >&2
 				exit 1
 			fi
+			shift 2
+			;;
+		--hostport)
+			echo "Using host port $2"
+			HOSTPORT="$2"
+			shift 2
+			;;
+		--guestport)
+			echo "Using guest port $2"
+			GUESTPORT="$2"
+			shift 2
+			;;
+		--interface)
+			echo "Using interface $2"
+			INTERFACE="$2"
 			shift 2
 			;;
 		-v|--verbose)
@@ -324,6 +374,14 @@ if [ "$1" != "" ]; then
 					echo "$VBOX is not running"
 				fi
 				shift
+				;;
+			forwardssh)
+				setSSHport "$VBOX" "$HOSTPORT" "$GUESTPORT" "$ADAPTER" "$INTERFACE"
+				if [ $? -eq 0 ]; then
+					exit 1
+				else
+					exit 0
+				fi
 				;;
 			*)
 				echo "Must specify a valid command to perform on $VBOX"
