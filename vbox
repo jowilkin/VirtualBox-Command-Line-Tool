@@ -215,7 +215,20 @@ setSSHport() {
 }
 
 usage() {
-	echo "usage: $BASENAME [OPTIONS] VM_NAME COMMAND"  >&2
+	echo "usage: $BASENAME [list|listrunning]  OR"
+	echo "       $BASENAME <vm name> start     [-p vrdpport]"
+	echo "                      poweroff"
+	echo "                      reset"
+	echo "                      pause"
+	echo "                      resume"
+	echo "                      save"
+	echo "                      status"
+	echo "                      show"
+	echo "                      connect"
+	echo "                      setram"
+	echo "                      setcpus"
+	echo "                      running"
+	echo "                      forwardssh"
 }
 
 ######################### Main #########################################
@@ -270,7 +283,7 @@ do
 			shift
 			;;
 		--help)
-			echo "Read the script dummy" >&2
+			usage
 			exit 0
 			;;	
 		--)
