@@ -71,11 +71,11 @@ startVM() {
 			return 0
 		else
 			if [ -n "$PORT" ]; then
-				$VBOXHEADLESS -startvm "$VBOX" --vrdp=on \
-					--vrdpport $PORT --vrdpaddress $HOST & 
+				$VBOXHEADLESS -startvm "$VBOX" --vrde=on \
+					-e "TCP/Ports=$PORT" -e "TCP/Address=$HOST" &
 				disown
 			else					
-				$VBOXHEADLESS -startvm "$VBOX" --vrdp=off &
+				$VBOXHEADLESS -startvm "$VBOX" --vrde=off &
 				disown
 			fi
 			return 1
@@ -167,8 +167,8 @@ setCPUs() {
 connectToVM() {
 	VBOX="$1"
 
-	# First figure out what port $VBOX uses for VRDP
-	getVRDPport $VBOX
+	# First figure out what port $VBOX uses for VRDE
+	getVRDEport $VBOX
 	echo "Trying to connect to $VBOX on port $HOST:$PORT"
 
 	rdesktop -a 16 -N $HOST:$PORT &
@@ -176,14 +176,14 @@ connectToVM() {
 
 # Get the port a VM is listening for VRDP on
 # Takes on input, the name of the VM
-getVRDPport() {
+getVRDEport() {
 	VBOX="$1"
 
-	VRDPport=$($VBOXMANAGE -q showvminfo "$VBOX" | grep "VRDP port:" | tr -dc '[0-9]')
-	PORT=$VRDPport
+	VRDEport=$($VBOXMANAGE -q showvminfo "$VBOX" | grep "VRDE port:" | tr -dc '[0-9]')
+	PORT=$VRDEport
 }
 
-setVRDP() {
+setVRDE() {
 	echo "To fill in"
 }
 
